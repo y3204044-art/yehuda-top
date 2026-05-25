@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>אשכח מרגניתא | מערכת פענוח</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      window.process = { env: { API_KEY: 'dummy-key-for-proxy' } };
+
+      const originalFetch = window.fetch;
+      window.fetch = async function(...args) {
+        let [resource, config] = args;
+        let url = typeof resource === 'string' ? resource : (resource instanceof Request ? resource.url : '');
+        
+        if (url.includes('googleapis.com') || url.includes('vertexai')) {
+          const proxyUrl = '/api-proxy';
+          
+          if (resource instanceof Request) {
+            config = {
+              method: resource.method,
+              headers: Object.fromEntries(resource.headers.entries()),
+              body: resource.body,
+              credentials: resource.credentials,
+              cache: resource.cache,
+              redirect: resource.redirect,
+              referrer: resource.referrer
+            };
+            resource = proxyUrl;
+          } else {
+            resource = proxyUrl;
+          }
+          
+          config = config || {};
+          config.headers = {
+            ...config.headers,
+            'x-app-proxy': 'true'
+          };
+          
+          return originalFetch(resource, config);
+        }
+        
+        return originalFetch(...args);
+      };
+
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Rubik', 'sans-serif'],
+            },
+            colors: {
+              spectrum: {
+                red: '#FF3366',
+                yellow: '#FFCC00',
+                green: '#00E676',
+                cyan: '#00E5FF',
+                blue: '#2979FF',
+                magenta: '#D500F9',
+              }
+            },
+            animation: {
+              'scan-vertical': 'scan-vertical 2.5s ease-in-out infinite',
+              'sparkle': 'sparkle 2s ease-in-out infinite',
+              'roll-bounce': 'roll-bounce 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+            },
+            keyframes: {
+              'scan-vertical': {
+                '0%': { top: '-10%', opacity: '0' },
+                '10%': { opacity: '1' },
+                '90%': { opacity: '1' },
+                '100%': { top: '100%', opacity: '0' },
+              },
+              'sparkle': {
+                '0%, 100%': { opacity: '0.5', transform: 'scale(0.9)' },
+                '50%': { opacity: '1', transform: 'scale(1.1)' },
+              },
+              'roll-bounce': {
+                '0%, 100%': { transform: 'translateY(0) rotate(0deg) scale(1)' },
+                '50%': { transform: 'translateY(-25px) rotate(180deg) scale(1.1)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #050505;
+        color: #ffffff;
+        margin: 0;
+        overflow: hidden;
+      }
+      
+      /* Smooth Blended Color Wheel Background */
+      .mesh-bg {
+        position: fixed;
+        top: -50%; left: -50%; right: -50%; bottom: -50%;
+        width: 200%; height: 200%;
+        background: conic-gradient(
+          from 0deg,
+          #FF3366, /* Red */
+          #FFCC00, /* Yellow */
+          #00E676, /* Green */
+          #00E5FF, /* Cyan */
+          #2979FF, /* Blue */
+          #D500F9, /* Magenta */
+          #FF3366  /* Red */
+        );
+        filter: blur(120px); /* Heavy blur for the smooth blended look */
+        z-index: -2;
+        animation: mesh-rotate 30s linear infinite;
+        pointer-events: none;
+        opacity: 0.8;
+      }
+
+      /* Noise texture for frosted glass feel */
+      .noise-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: 0.04;
+        z-index: -1;
+        pointer-events: none;
+      }
+
+      @keyframes mesh-rotate {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      /* Soft Glass Scrollbar */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.4);
+      }
+
+      /* Deep Glassmorphism */
+      .glass-panel {
+        background: rgba(10, 10, 15, 0.4);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+    </style>
+      </head>
+  <body class="min-h-screen overflow-hidden font-sans">
+    <div class="mesh-bg"></div>
+    <div class="noise-overlay"></div>
+    <div id="root" class="h-screen w-screen"></div>
+    <script type="module" src="./index.tsx"></script>
+  <script type="module" src="/index.js"></script></body>
+</html>
