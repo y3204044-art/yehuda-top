@@ -6,7 +6,7 @@ import { cropImage, detectColumnsProgrammatically } from './utils/imageUtils';
 import { exportToDocx } from './services/exportService';
 import { Sidebar } from './components/Sidebar';
 import { Workspace } from './components/Workspace';
-import { Upload, Play, Pause, Download, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Upload, Play, Pause, Download, Loader2, Cpu } from 'lucide-react';
 
 const App: React.FC = () => {
   const [pages, setPages] = useState<PageData[]>([]);
@@ -31,34 +31,6 @@ const App: React.FC = () => {
 
     setIsExtractingPdf(true);
     try {
-      // Handle Single Image Upload
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const base64 = event.target?.result as string;
-          const newPage: PageData = {
-            id: `page-${Date.now()}-1`,
-            pageNumber: 1,
-            thumbnail: base64,
-            status: 'pending',
-            rightText: '',
-            leftText: ''
-          };
-          
-          if (pdfDocRef.current) {
-            pdfDocRef.current.destroy();
-            pdfDocRef.current = null;
-          }
-          
-          setPages([newPage]);
-          setActivePageId(newPage.id);
-          setIsExtractingPdf(false);
-        };
-        reader.readAsDataURL(file);
-        return;
-      }
-
-      // Handle PDF Upload
       if (pdfDocRef.current) {
         pdfDocRef.current.destroy();
       }
@@ -69,7 +41,7 @@ const App: React.FC = () => {
       const newPages: PageData[] = [];
 
       for (let i = 1; i <= numPages; i++) {
-        const thumb = await renderPageToImage(pdf, i, 0.5, 0.5);
+        const thumb = await renderPageToImage(pdf, i, 0.4);
         newPages.push({
           id: `page-${Date.now()}-${i}`,
           pageNumber: i,
@@ -88,8 +60,8 @@ const App: React.FC = () => {
         setActivePageId(newPages[0].id);
       }
     } catch (error) {
-      console.error("Extraction Error:", error);
-      alert("שגיאה בטעינת הקובץ. ודא שהקובץ תקין.");
+      console.error("PDF Extraction Error:", error);
+      alert("שגיאה בטעינת קובץ ה-PDF. ודא שהקובץ תקין.");
     } finally {
       setIsExtractingPdf(false);
       setPdfProgress({ current: 0, total: 0 });
@@ -100,20 +72,15 @@ const App: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     const loadHighRes = async () => {
-      if (activePageId) {
+      if (activePageId && pdfDocRef.current) {
         setActiveHighResImage(null);
         const page = pagesRef.current.find(p => p.id === activePageId);
         if (page) {
-          if (pdfDocRef.current) {
-            try {
-              const highRes = await renderPageToImage(pdfDocRef.current, page.pageNumber, 2.0, 0.8);
-              if (isMounted) setActiveHighResImage(highRes);
-            } catch (e) {
-              console.error("Failed to load high res image for viewing", e);
-            }
-          } else {
-            // It's a single image, thumbnail is already high res
-            if (isMounted) setActiveHighResImage(page.thumbnail);
+          try {
+            const highRes = await renderPageToImage(pdfDocRef.current, page.pageNumber, 1.5);
+            if (isMounted) setActiveHighResImage(highRes);
+          } catch (e) {
+            console.error("Failed to load high res image for viewing", e);
           }
         }
       }
@@ -127,16 +94,14 @@ const App: React.FC = () => {
   }, []);
 
   const processPage = useCallback(async (page: PageData) => {
+    if (!pdfDocRef.current) return;
+    
     processingRef.current = true;
     setActivePageId(page.id);
 
     try {
       updatePage(page.id, { status: 'detecting', error: undefined });
-      
-      let ocrImageBase64 = page.thumbnail;
-      if (pdfDocRef.current) {
-        ocrImageBase64 = await renderPageToImage(pdfDocRef.current, page.pageNumber, 3.0, 1.0);
-      }
+      const ocrImageBase64 = await renderPageToImage(pdfDocRef.current, page.pageNumber, 2.5);
 
       const layout = await detectColumnsProgrammatically(ocrImageBase64);
       updatePage(page.id, { layout });
@@ -191,87 +156,85 @@ const App: React.FC = () => {
   const totalCount = pages.length;
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden relative z-10">
+    <div className="h-screen w-screen flex flex-col overflow-hidden relative">
       
-      {/* Header */}
-      <div className="p-4 pb-0 shrink-0 relative">
-        <header className="glass-panel rounded-3xl flex items-center justify-between px-6 py-3 relative overflow-hidden">
+      {/* Top Navigation Bar - Cyberpunk Style */}
+      <header className="h-16 glass-panel border-b border-neon-cyan/20 flex items-center justify-between px-6 shrink-0 z-20 relative">
+        {/* Top glowing line */}
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-neon-cyan to-transparent opacity-50"></div>
+
+        <div className="flex items-center gap-4">
+          <input 
+            type="file" 
+            accept="application/pdf" 
+            className="hidden" 
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+          />
           
-          {/* Upload Progress Overlay */}
-          {isExtractingPdf && (
-            <div className="absolute bottom-0 left-0 h-1 bg-spectrum-cyan animate-pulse transition-all duration-300" style={{ width: `${(pdfProgress.current / Math.max(1, pdfProgress.total)) * 100}%` }}></div>
+          {/* Upload Button */}
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isExtractingPdf || isAutoProcessing}
+            className="group relative flex items-center gap-2 px-5 py-2 bg-neon-dark border border-neon-cyan/50 text-neon-cyan hover:bg-neon-cyan/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-neon-cyan/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+            {isExtractingPdf ? <Loader2 className="w-4 h-4 animate-spin relative z-10" /> : <Upload className="w-4 h-4 relative z-10" />}
+            <span className="font-tech font-semibold tracking-wider relative z-10">
+              {isExtractingPdf ? `UPLOADING [${pdfProgress.current}/${pdfProgress.total}]` : 'INITIATE UPLOAD'}
+            </span>
+          </button>
+
+          {pages.length > 0 && (
+            <>
+              <div className="w-px h-6 bg-neon-cyan/20 mx-2 skew-x-12" />
+              
+              {/* Process Button */}
+              <button
+                onClick={() => setIsAutoProcessing(!isAutoProcessing)}
+                className={`group relative flex items-center gap-2 px-5 py-2 border transition-all duration-300 overflow-hidden ${
+                  isAutoProcessing 
+                    ? 'bg-neon-magenta/10 border-neon-magenta text-neon-magenta shadow-[0_0_15px_rgba(255,0,255,0.3)]' 
+                    : 'bg-neon-green/10 border-neon-green/50 text-neon-green hover:bg-neon-green/20 hover:border-neon-green hover:shadow-[0_0_15px_rgba(57,255,20,0.3)]'
+                }`}
+              >
+                {isAutoProcessing ? <Pause className="w-4 h-4 relative z-10" /> : <Play className="w-4 h-4 relative z-10" />}
+                <span className="font-tech font-semibold tracking-wider relative z-10">
+                  {isAutoProcessing ? 'HALT SEQUENCE' : 'AUTO-PROCESS'}
+                </span>
+              </button>
+            </>
           )}
+        </div>
 
-          <div className="flex items-center gap-4 relative z-10">
-            <input 
-              type="file" 
-              accept="application/pdf, image/jpeg, image/png" 
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-            />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isExtractingPdf || isAutoProcessing}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-spectrum-cyan to-spectrum-blue hover:opacity-90 disabled:opacity-50 disabled:grayscale text-white rounded-full font-medium transition-all shadow-[0_0_20px_rgba(0,229,255,0.3)]"
-            >
-              {isExtractingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-              {isExtractingPdf ? 'מעבד קובץ...' : 'העלה PDF / תמונה'}
-            </button>
-
-            {isExtractingPdf && pdfProgress.total > 0 && (
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-black/40 rounded-full border border-spectrum-cyan/30 text-sm text-spectrum-cyan">
-                <span>קורא עמודים:</span>
-                <span className="font-bold">{pdfProgress.current} / {pdfProgress.total}</span>
+        <div className="flex items-center gap-6">
+          {totalCount > 0 && (
+            <div className="flex items-center gap-3 font-tech">
+              <span className="text-neon-cyan/70 text-sm tracking-widest uppercase">SYS.PROGRESS</span>
+              <span className="text-neon-cyan font-bold text-lg text-glow-cyan">{completedCount}/{totalCount}</span>
+              <div className="w-32 h-1.5 bg-neon-dark border border-neon-cyan/30 overflow-hidden relative">
+                <div 
+                  className="absolute top-0 left-0 h-full bg-neon-cyan shadow-[0_0_10px_#00f3ff] transition-all duration-500" 
+                  style={{ width: `${(completedCount / totalCount) * 100}%` }}
+                />
               </div>
-            )}
-
-            {pages.length > 0 && !isExtractingPdf && (
-              <>
-                <div className="w-px h-6 bg-white/20 mx-2" />
-                <button
-                  onClick={() => setIsAutoProcessing(!isAutoProcessing)}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium transition-all text-white ${
-                    isAutoProcessing 
-                      ? 'bg-gradient-to-r from-spectrum-yellow to-orange-400 shadow-[0_0_20px_rgba(255,204,0,0.3)] text-gray-900' 
-                      : 'bg-gradient-to-r from-spectrum-green to-emerald-400 shadow-[0_0_20px_rgba(0,230,118,0.3)]'
-                  }`}
-                >
-                  {isAutoProcessing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  {isAutoProcessing ? 'השהה עיבוד' : 'התחל עיבוד אוטומטי'}
-                </button>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-6 relative z-10">
-            {totalCount > 0 && (
-              <div className="text-sm text-gray-200 flex items-center gap-3 bg-black/40 px-5 py-2 rounded-full border border-white/10">
-                <span className="font-medium">התקדמות:</span>
-                <span className="font-bold text-white">{completedCount} / {totalCount}</span>
-                <div className="w-32 h-2 bg-black/60 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-spectrum-green to-spectrum-cyan transition-all duration-500 rounded-full shadow-[0_0_10px_rgba(0,230,118,0.8)]" 
-                    style={{ width: `${(completedCount / totalCount) * 100}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            
-            <button
-              onClick={handleExport}
-              disabled={completedCount === 0}
-              className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed rounded-full font-medium transition-all border border-white/10"
-            >
-              <Download className="w-5 h-5" />
-              ייצא ל-DOCX
-            </button>
-          </div>
-        </header>
-      </div>
+            </div>
+          )}
+          
+          {/* Export Button */}
+          <button
+            onClick={handleExport}
+            disabled={completedCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-transparent border border-white/20 text-white/70 hover:text-white hover:border-white/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 font-tech tracking-wider"
+          >
+            <Download className="w-4 h-4" />
+            EXPORT.DOCX
+          </button>
+        </div>
+      </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden p-4 gap-4">
+      <div className="flex-1 flex overflow-hidden relative z-10">
         <Sidebar 
           pages={pages} 
           activePageId={activePageId} 
