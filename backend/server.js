@@ -99,25 +99,20 @@ const API_CLIENT_MAP = [
         }
     },
   },
- {
-    name: "ReasoningEngine:query",
-    patternForProxy: "https://{{endpoint_location}}-aiplatform.googleapis.com/{{version}}/projects/{{project_id}}/locations/{{location_id}}/reasoningEngines/{{engine_id}}:query",
-    getApiEndpoint: (context, params) => {
-      return `https://${params['endpoint_location']}-aiplatform.clients6.google.com/v1beta1/projects/${params['project_id']}/locations/${params['location_id']}/reasoningEngines/${params['engine_id']}:query`;
-    },
-    isStreaming: false,
-    transformFn: null,
-  },
- {
-    name: "ReasoningEngine:streamQuery",
-    patternForProxy: "https://{{endpoint_location}}-aiplatform.googleapis.com/{{version}}/projects/{{project_id}}/locations/{{location_id}}/reasoningEngines/{{engine_id}}:streamQuery",
-    getApiEndpoint: (context, params) => {
-      return `https://${params['endpoint_location']}-aiplatform.clients6.google.com/v1beta1/projects/${params['project_id']}/locations/${params['location_id']}/reasoningEngines/${params['engine_id']}:streamQuery`;
-    },
-    isStreaming: true,
-    transformFn: null,
-  },
 ].map((client) => ({ ...client, patternInfo: parsePattern(client.patternForProxy) }));
+
+// IMPORTANT: Vertex AI Studio SSRF Protection
+// The set below is the exhaustive allow-list of upstream hostnames this
+// proxy may forward authenticated requests to. It is sourced at code
+// generation time from the RestApiClient.getAllowedUpstreamHosts() of every
+// client embedded in API_CLIENT_MAP. Removing, weakening, or widening this
+// check (for example, by adding wildcards or computing entries from request
+// data) re-introduces the SSRF vulnerability that allows the deployed
+// service account's OAuth access token to be exfiltrated to an
+// attacker-controlled host.
+const ALLOWED_UPSTREAM_HOSTS = new Set([
+  "aiplatform.clients6.google.com",
+]);
 
 // Uses Google Application Default Credentials (ADC).
 // Users need to run "gcloud auth application-default login" in order to use the proxy.
@@ -222,6 +217,24 @@ app.post('/api-proxy', async (req, res) => {
     // 3. Construct the full API URL using env-set GOOGLE_CLOUD_PROJECT/LOCATION and extracted params
     const context = {projectId: GOOGLE_CLOUD_PROJECT, region: GOOGLE_CLOUD_LOCATION};
     const apiUrl = apiClient.getApiEndpoint(context, extractedParams);
+
+    // IMPORTANT: Vertex AI Studio SSRF Protection
+    // Parse the constructed apiUrl with the standard URL parser (not a
+    // regex) and require the resulting hostname to be in the hardcoded
+    // ALLOWED_UPSTREAM_HOSTS set. This neutralizes attacks that smuggle a
+    // URL-grammar delimiter (e.g. '#') into a pattern parameter to redirect
+    // the authenticated upstream request to an attacker-controlled host.
+    let parsedApiUrl;
+    try {
+      parsedApiUrl = new URL(apiUrl);
+    } catch (e) {
+      console.error(`[Node Proxy] Invalid API URL: ${apiUrl}`);
+      return res.status(400).json({ error: 'Invalid API URL.' });
+    }
+    if (!ALLOWED_UPSTREAM_HOSTS.has(parsedApiUrl.hostname.toLowerCase())) {
+      console.error(`[Node Proxy] Upstream host not allowed: ${parsedApiUrl.hostname}`);
+      return res.status(400).json({ error: 'Upstream host not allowed.' });
+    }
     console.log(`[Node Proxy] Forwarding to Vertex API: ${apiUrl}`);
 
     // 4. Prepare headers for the API call
