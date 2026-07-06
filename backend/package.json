@@ -1,5 +1,5 @@
 {
-  "name": "-api-backend-server",
+  "name": "api-backend-server",
   "type": "module",
   "private": true,
   "version": "0.0.0",
