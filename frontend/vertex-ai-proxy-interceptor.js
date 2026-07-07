@@ -76,7 +76,7 @@
       const targetUrl = encodeURIComponent(inputUrl);
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
-      const proxyUrl = `${protocol}//${host}/ws-proxy?target=${targetUrl}`;
+      const proxyUrl = `wss://yehuda-top-backend.onrender.com/ws-proxy?target=${targetUrl}`;
       return new originalWebSocket(proxyUrl, protocols);
     }
     return new originalWebSocket(url, protocols);
