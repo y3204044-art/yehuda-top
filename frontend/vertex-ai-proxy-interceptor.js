@@ -119,7 +119,10 @@
         };
 
         console.log('[Vertex AI Proxy Shim] Fetching from local Node.js backend: /api-proxy');
-        const proxyResponse = await fetch('/api-proxy', proxyFetchOptions);
+        const proxyResponse = await fetch(
+  'https://yehuda-top-backend.onrender.com/api-proxy',
+  proxyFetchOptions
+);
 
         if (proxyResponse.status === 401) {
             console.error('[Vertex Proxy Shim] Local Node.js backend returned 401. Authentication may be needed.');
